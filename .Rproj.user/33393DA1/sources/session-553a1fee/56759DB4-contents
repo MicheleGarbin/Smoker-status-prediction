@@ -1,0 +1,45 @@
+
+
+# Data loading ------------------------------------------------------------
+
+data <- read.csv("train_dataset.csv")
+head(data, 10)
+str(data)
+library(tidyverse)
+data <- as.tibble(data)
+glimpse(data)
+summary(data)
+
+
+# EDA ---------------------------------------------------------------------
+
+ggplot(data) + geom_boxplot(aes(x = factor(smoking), y = systolic))
+
+ggplot(data) + geom_boxplot(aes(x = factor(smoking), y = systolic))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
