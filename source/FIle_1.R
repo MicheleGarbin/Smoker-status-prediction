@@ -169,6 +169,136 @@ formula(step_both0)
 # Warning message:
 # glm.fit: fitted probabilities numerically 0 or 1 occurred 
 
+# curva ROC
+library(yardstick)
+dtr <- data.frame(Y = factor(train$smoking, 
+                             levels = c("yes", "no"), labels = c(1, 0)),
+                  p = 1 - step_both0$fitted.values,
+                  type = "Train")
+prob <- predict(step_both0, newdata = test %>% select(-smoking), 
+                type = "response")
+dte <- data.frame(Y = factor(test$smoking, 
+                             levels = c("yes", "no"), labels = c(1, 0)),
+                  p = 1 - prob,
+                  type = "Test")
+bind_rows(dtr, dte) %>% group_by(type) %>% roc_curve(Y, p) %>% autoplot()
+bind_rows(dtr, dte) %>% group_by(type) %>% roc_auc(Y, p)
+
+# per un confronto finale tra tutti i modelli mi salvo l'MSE sul test:
+smoking.train.bin <- ifelse(train$smoking == "yes", 1, 0)
+smoking.test.bin <- ifelse(test$smoking == "yes", 1, 0)
+err.stepwise <- mean((smoking.test.bin - prob)^2)
+
+
+
+# ridge -------------------------------------------------------------------
+
+xtrain <- train %>% select(!smoking) %>% as.matrix()
+xtest <- test %>% select(!smoking) %>% as.matrix()
+
+library(glmnet)
+ridge1 <- glmnet(y = smoking.train.bin,
+                 x = xtrain,
+                 alpha = 0, lambda.min.ratio = 1e-10, nlambda = 200)
+# sui dati di test individuiamo il lambda che genera il minore MSE
+previsione.ridge <- predict(ridge1, 
+                      newx = xtest, type = "response")
+err.ridge <- colMeans((smoking.test.bin - previsione.ridge)^2)
+index.lambda.ridge <- err.ridge %>% which.min()
+
+# ridge con cross-validation
+set.seed(123)
+ridge.cv <- cv.glmnet(y = smoking.train.bin,
+                      x = xtrain,
+                      alpha = 0, nfolds = 500)
+prev_ridge.min <- predict(ridge.cv, 
+                          newx = xtest,
+                          s = "lambda.min",
+                          type = "response")
+prev_ridge.1se <- predict(ridge.cv, 
+                          newx = xtest,
+                          s = "lambda.1s",
+                          type = "response")
+
+# scegliamo il lambda ottimale per la ridge come quello che minimizza l'MSE
+# sui dati di test:
+c(err.ridge[index.lambda.ridge],
+  mean((smoking.test.bin - prev_ridge.min)^2),
+  mean((smoking.test.bin - prev_ridge.1se)^2)
+  )
+
+# il lambda scelto è quello calcolato senza cross-validation; calcoliamo 
+# ROC e AUC per il modello ridge scelto:
+dtr.ridge <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"), 
+                                   levels = c("1", "0")),
+                        p = as.vector(predict(ridge1, xtrain, 
+                              s = ridge1$lambda[index.lambda.ridge],
+                              type = "response")),
+                     type = "Train")
+dte.ridge <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
+                                   levels = c("1", "0")),
+                        p = as.vector(previsione.ridge[, index.lambda.ridge]),
+                     type = "Test")
+bind_rows(dtr.ridge, dte.ridge) %>% group_by(type) %>% 
+  roc_curve(Y, p, event_level = "first") %>% autoplot()
+bind_rows(dtr.ridge, dte.ridge) %>% group_by(type) %>% roc_auc(Y, p) # leggermente
+                        # peggio del risultato ottenuto per procedura stepwise
+
+
+
+# lasso -------------------------------------------------------------------
+
+lasso1 <- glmnet(y = smoking.train.bin,
+                 x = xtrain,
+                 alpha = 1, lambda.min.ratio = 1e-10, nlambda = 200)
+# sui dati di test individuiamo il lambda che genera il minore MSE
+previsione.lasso <- predict(lasso1, 
+                            newx = xtest, type = "response")
+err.lasso <- colMeans((smoking.test.bin - previsione.lasso)^2)
+index.lambda.lasso <- err.lasso %>% which.min()
+
+# ridge con cross-validation
+set.seed(123)
+lasso.cv <- cv.glmnet(y = smoking.train.bin,
+                      x = xtrain,
+                      alpha = 1, nfolds = 500)
+prev_lasso.min <- predict(lasso.cv, 
+                          newx = xtest,
+                          s = "lambda.min",
+                          type = "response")
+prev_lasso.1se <- predict(lasso.cv, 
+                          newx = xtest,
+                          s = "lambda.1s",
+                          type = "response")
+
+# scegliamo il lambda ottimale per la ridge come quello che minimizza l'MSE
+# sui dati di test:
+c(err.ridge[index.lambda.lasso],
+  mean((smoking.test.bin - prev_lasso.min)^2),
+  mean((smoking.test.bin - prev_lasso.1se)^2)
+)
+
+# il lambda scelto è quello calcolato minimo calcolato con cross-validation; 
+# calcoliamo ROC e AUC per il modello lasso scelto:
+dtr.lasso <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"), 
+                                   levels = c("1", "0")),
+                        p = as.vector(predict(lasso.cv, newx = xtrain, 
+                                              s = "lambda.min",
+                                              type = "response")),
+                        type = "Train")
+dte.lasso <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
+                                   levels = c("1", "0")),
+                        p = as.vector(prev_lasso.min),
+                        type = "Test")
+bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% 
+  roc_curve(Y, p, event_level = "first") %>% autoplot()
+bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% roc_auc(Y, p) # stessi 
+                                        # risultati della regressione ridge
+
+# per capire quali variabili seleziona il lasso:
+predict(lasso.cv, type = "coefficients", s = "lambda.min") # non porta a 0 
+                                                      # alcuna variabile
+
 
 
 # BSS ---------------------------------------------------------------------
