@@ -29,8 +29,8 @@ data %>%
   lm(Cholesterol ~ HDL_LDL_Sum, data = .) %>%
   summary() %>%
   .$r.squared
-# LDL e HDL are strictly related to Cholesterol: this leads to a 
-# collinearity issue
+# LDL e HDL sono strettamente legate a Cholesterol: questo causa un problema 
+# di multicollinearità
 
 # smoking, age(!):
 ggplot(data) + geom_boxplot(aes(x = smoking, y = age))
@@ -183,6 +183,11 @@ dte <- data.frame(Y = factor(test$smoking,
                   type = "Test")
 bind_rows(dtr, dte) %>% group_by(type) %>% roc_curve(Y, p) %>% autoplot()
 bind_rows(dtr, dte) %>% group_by(type) %>% roc_auc(Y, p)
+
+# matrice di confusione
+library(caret)
+pred_class <- factor(ifelse(prob < 0.5, "yes", "no"), levels = c("yes", "no"))
+confusionMatrix(pred_class, test$smoking)
 
 # per un confronto finale tra tutti i modelli mi salvo l'MSE sul test:
 smoking.train.bin <- ifelse(train$smoking == "yes", 1, 0)
