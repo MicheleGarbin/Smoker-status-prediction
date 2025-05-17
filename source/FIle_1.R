@@ -190,7 +190,6 @@ pred_class <- factor(ifelse(prob < 0.5, "yes", "no"), levels = c("yes", "no"))
 confusionMatrix(pred_class, test$smoking)
 
 # per un confronto finale tra tutti i modelli mi salvo l'MSE sul test:
-smoking.train.bin <- ifelse(train$smoking == "yes", 1, 0)
 smoking.test.bin <- ifelse(test$smoking == "yes", 1, 0)
 err.stepwise <- mean((smoking.test.bin - prob)^2)
 
@@ -198,38 +197,49 @@ err.stepwise <- mean((smoking.test.bin - prob)^2)
 
 # ridge -------------------------------------------------------------------
 
-xtrain <- train %>% select(!smoking) %>% as.matrix()
-xtest <- test %>% select(!smoking) %>% as.matrix()
+# divido il dataset di train in train1 e validation, il secondo dei quali
+# lo utilizzo per scegliere il lambda ottimale
+set.seed(1234)
+train <- train %>% mutate(split = ifelse(runif(n()) < 0.7, "train", "test"))
+# numero di righe del dataframe che viene passato
+train1 <- train %>% filter(split == "train") %>% select(-split)
+validation <- train %>% filter(split == "test") %>% select(-split)
+
+smoking.train1.bin <- ifelse(train1$smoking == "yes", 1, 0)
+smoking.validation.bin <- ifelse(validation$smoking == "yes", 1, 0)
+
+xtrain1 <- train1 %>% select(!smoking) %>% as.matrix()
+xvalidation <- validation %>% select(!smoking) %>% as.matrix()
 
 library(glmnet)
-ridge1 <- glmnet(y = smoking.train.bin,
-                 x = xtrain,
+ridge1 <- glmnet(y = smoking.train1.bin,
+                 x = xtrain1,
                  alpha = 0, lambda.min.ratio = 1e-10, nlambda = 200)
-# sui dati di test individuiamo il lambda che genera il minore MSE
+# sui dati di validation individuo il lambda che genera il minore MSE
 previsione.ridge <- predict(ridge1, 
-                      newx = xtest, type = "response")
-err.ridge <- colMeans((smoking.test.bin - previsione.ridge)^2)
+                      newx = xvalidation, type = "response")
+err.ridge <- colMeans((smoking.validation.bin - previsione.ridge)^2)
 index.lambda.ridge <- err.ridge %>% which.min()
 
 # ridge con cross-validation
 set.seed(123)
-ridge.cv <- cv.glmnet(y = smoking.train.bin,
-                      x = xtrain,
+ridge.cv <- cv.glmnet(y = smoking.train1.bin,
+                      x = xtrain1,
                       alpha = 0, nfolds = 500)
 prev_ridge.min <- predict(ridge.cv, 
-                          newx = xtest,
+                          newx = xvalidation,
                           s = "lambda.min",
                           type = "response")
 prev_ridge.1se <- predict(ridge.cv, 
-                          newx = xtest,
+                          newx = xvalidation,
                           s = "lambda.1s",
                           type = "response")
 
 # scegliamo il lambda ottimale per la ridge come quello che minimizza l'MSE
 # sui dati di test:
 c(err.ridge[index.lambda.ridge],
-  mean((smoking.test.bin - prev_ridge.min)^2),
-  mean((smoking.test.bin - prev_ridge.1se)^2)
+  mean((smoking.validation.bin - prev_ridge.min)^2),
+  mean((smoking.validation.bin - prev_ridge.1se)^2)
   )
 
 # il lambda scelto è quello calcolato senza cross-validation; calcoliamo 
@@ -242,7 +252,9 @@ dtr.ridge <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"),
                      type = "Train")
 dte.ridge <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(previsione.ridge[, index.lambda.ridge]),
+                        p = as.vector(predict(ridge1, xtest, 
+                              s = ridge1$lambda[index.lambda.ridge],
+                              type = "response")),
                      type = "Test")
 bind_rows(dtr.ridge, dte.ridge) %>% group_by(type) %>% 
   roc_curve(Y, p, event_level = "first") %>% autoplot()
@@ -253,34 +265,34 @@ bind_rows(dtr.ridge, dte.ridge) %>% group_by(type) %>% roc_auc(Y, p) # leggermen
 
 # lasso -------------------------------------------------------------------
 
-lasso1 <- glmnet(y = smoking.train.bin,
-                 x = xtrain,
+lasso1 <- glmnet(y = smoking.train1.bin,
+                 x = xtrain1,
                  alpha = 1, lambda.min.ratio = 1e-10, nlambda = 200)
-# sui dati di test individuiamo il lambda che genera il minore MSE
+# sul validation set individuo il lambda che genera il minore MSE
 previsione.lasso <- predict(lasso1, 
-                            newx = xtest, type = "response")
-err.lasso <- colMeans((smoking.test.bin - previsione.lasso)^2)
+                            newx = xvalidation, type = "response")
+err.lasso <- colMeans((smoking.validation.bin - previsione.lasso)^2)
 index.lambda.lasso <- err.lasso %>% which.min()
 
 # ridge con cross-validation
 set.seed(123)
-lasso.cv <- cv.glmnet(y = smoking.train.bin,
-                      x = xtrain,
+lasso.cv <- cv.glmnet(y = smoking.train1.bin,
+                      x = xtrain1,
                       alpha = 1, nfolds = 500)
 prev_lasso.min <- predict(lasso.cv, 
-                          newx = xtest,
+                          newx = xvalidation,
                           s = "lambda.min",
                           type = "response")
 prev_lasso.1se <- predict(lasso.cv, 
-                          newx = xtest,
+                          newx = xvalidation,
                           s = "lambda.1s",
                           type = "response")
 
 # scegliamo il lambda ottimale per la ridge come quello che minimizza l'MSE
 # sui dati di test:
 c(err.ridge[index.lambda.lasso],
-  mean((smoking.test.bin - prev_lasso.min)^2),
-  mean((smoking.test.bin - prev_lasso.1se)^2)
+  mean((smoking.validation.bin - prev_lasso.min)^2),
+  mean((smoking.validation.bin - prev_lasso.1se)^2)
 )
 
 # il lambda scelto è quello calcolato minimo calcolato con cross-validation; 
@@ -293,7 +305,9 @@ dtr.lasso <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"),
                         type = "Train")
 dte.lasso <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(prev_lasso.min),
+                        p = as.vector(predict(lasso.cv, newx = xtest, 
+                                              s = "lambda.min",
+                                              type = "response")),
                         type = "Test")
 bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% 
   roc_curve(Y, p, event_level = "first") %>% autoplot()
@@ -301,8 +315,8 @@ bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% roc_auc(Y, p) # stessi
                                         # risultati della regressione ridge
 
 # per capire quali variabili seleziona il lasso:
-predict(lasso.cv, type = "coefficients", s = "lambda.min") # non porta a 0 
-                                                      # alcuna variabile
+predict(lasso.cv, type = "coefficients", s = "lambda.min") 
+# porta a 0 solamente age
 
 
 
@@ -320,104 +334,5 @@ image(t(bss$which)) #
 
 
 
-# CART --------------------------------------------------------------------
-
-if (!require(caret)) install.packages("caret", dependencies = TRUE)
-if (!require(rpart)) install.packages("rpart", dependencies = TRUE)
-library(caret)
-library(rpart)
-
-target <- 'smoking'
-
-train[[target]] <- as.factor(train[[target]])
-X <- train[, setdiff(names(train), target)] # considera tutti i nomi di
-                      # colonna del dataset train fuorchè quelli che 
-                      # coincidono con il nome individuato dalla 
-                      # variabile target
-X <- as.data.frame(X) # viene fatto per evitare warning di row names in caret
-                      # (cosa che succede se utilizziamo un tibble)
-y <- train[[target]] 
-
-target <- "smoking"
-set.seed(123)
-cv_ctrl <- trainControl(
-  method          = "cv", # utilizza la validazione incrociata come 
-                          # metodo di resampling
-  number          = 5, # impiega una 5-fold cross validation
-  savePredictions = "final", # salva le predizioni fatte nel fold finale
-  classProbs      = TRUE # il modello deve calcolare anche le probabilità di 
-                         # classe oltre alle etichetta predette (utile per poi
-                         # costruire una curva ROC o AUC)
-) # impostazioni di controllo per la cross-validation quando si usa caret
-
-cp_values <- seq(0.0001, 0.001, by = 0.00001) # insieme di possibili valori
-                                      # per il parametro di complessità
-cp_grid   <- expand.grid(cp = cp_values)
-
-cv_model <- train(
-  x          = X,
-  y          = y,
-  method     = "rpart",
-  trControl  = cv_ctrl,
-  tuneGrid   = cp_grid,
-  metric     = "Accuracy"
-)
-print(cv_model) 
-best_cp <- cv_model$bestTune$cp # estrae il miglior cp
-cat("Best cp:", best_cp)
-plot(cv_model)
-
-final_model <- rpart(
-  formula = as.formula(paste(target, "~ .")),
-  data    = train,
-  control = rpart.control(cp = best_cp)
-)
-print(final_model) # struttura: regole di split e statistiche
-plot(final_model, uniform = TRUE, margin = 0.1)
-X_test <- test %>% select(-smoking)
-preds <- predict(final_model, newdata = X_test, type = "class")
-confusionMatrix(preds, test[[target]])
-
-library(pROC)
-# probabilità predette
-probs <- predict(final_model, newdata = test, type = "prob")
-# curva ROC
-roc_obj <- roc(response = test[[target]], predictor = probs[,"yes"], 
-               levels = c("no", "yes"), direction = "<")
-plot(roc_obj, col = "blue", lwd = 2, main = "Curva ROC")
-# calcolo AUC
-auc_value <- auc(roc_obj)
-print(auc_value)
-
-
-
-# random forest  ----------------------------------------------------------
-
-library(randomForest)
-
-set.seed(123)  
-rf_model <- randomForest(
-  smoking ~ .,
-  data = train,
-  ntree = 1000,
-  importance = TRUE
-)
-rf_probs <- predict(rf_model, newdata = test, type = "prob")[, "yes"]
-rf_preds <- ifelse(rf_probs >= 0.5, "yes", "no")
-rf_preds <- factor(rf_preds, levels = c("yes", "no"))
-conf_matrix <- confusionMatrix(rf_preds, test$smoking, positive = "yes")
-print(conf_matrix)
-
-# confronto con l'albero trovato prima:
-confusionMatrix(preds, test[[target]])
-
-# l'adattamento è decisamente migliorato, anche per quanto riguarda 
-# la sensibilità (rapporto fumatori identificati su fumatori) che è ciò 
-# che ci interessa di più
-
-roc_obj <- roc(response = test$smoking, predictor = rf_probs, levels = c("yes", "no"))
-plot(roc_obj, col = "blue", lwd = 2, main = "Curva ROC - Random Forest")
-auc_value <- auc(roc_obj)
-cat("AUC:", auc_value, "\n")
 
 
