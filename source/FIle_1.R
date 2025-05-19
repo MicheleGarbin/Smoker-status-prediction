@@ -197,38 +197,17 @@ err.stepwise <- mean((smoking.test.bin - prob)^2)
 
 # ridge -------------------------------------------------------------------
 
-# standardizzo il train set
-train.num <- train %>% select(-smoking) %>% 
-  mutate(across(where(is.factor), ~ as.numeric(as.character(.)))) %>% 
-  as.matrix()
-train.bar <- train.num %>% apply(2, mean)
-n <- nrow(train.num)
-train.vcov <- var(train.num) * (n - 1) / n
-D.inv.sqrt <- diag(1 / sqrt(diag(train.vcov)))
-xtrain.std <- (train.num - rep(1, n) %*% t(train.bar)) %*% D.inv.sqrt
-# reinserisco le colonne che prima ho tolto
-train_smoking <- train %>% select(smoking)
-train.std <- cbind(xtrain.std, train_smoking) %>% as.tibble()
-
-# standardizzo il test set supponendo di non avere i dati: per questo motivo
-# utilizzo media e varianza del train set
-test.num <- test %>% select(-smoking) %>% 
-  mutate(across(where(is.factor), ~ as.numeric(as.character(.)))) %>% 
-  as.matrix()
-ntest <- nrow(test)
-xtest.std <- (test.num - rep(1, ntest) %*% t(train.bar)) %*% D.inv.sqrt
-test_smoking <- test %>% select(smoking)
-test.std <- cbind(xtest.std, test_smoking) %>% as.tibble()
-
+xtrain <- train %>% select(-smoking) %>% as.matrix()
+xtest <- test %>% select(-smoking) %>% as.matrix()
 
 # divido il dataset di train standardizzato in train1 e validation, il secondo 
 # dei quali lo utilizzo per scegliere il lambda ottimale
 set.seed(1234)
-train.std <- train.std %>% mutate(split = ifelse(runif(n()) < 0.7, 
+train <- train %>% mutate(split = ifelse(runif(n()) < 0.7, 
                                          "train1", "validation"))
 
-train1 <- train.std %>% filter(split == "train1") %>% select(-split) 
-validation <- train.std %>% filter(split == "validation") %>% select(-split)  
+train1 <- train %>% filter(split == "train1") %>% select(-split) 
+validation <- train %>% filter(split == "validation") %>% select(-split)  
 
 smoking.train1.bin <- ifelse(train1$smoking == "yes", 1, 0)
 smoking.validation.bin <- ifelse(validation$smoking == "yes", 1, 0)
@@ -269,15 +248,15 @@ c(err.ridge[index.lambda.ridge],
 
 # il lambda scelto è quello calcolato senza cross-validation; calcoliamo 
 # ROC e AUC per il modello ridge scelto:
-dtr.ridge <- data.frame(Y = factor(ifelse(train.std$smoking == "yes", "1", "0"), 
+dtr.ridge <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(predict(ridge1, xtrain.std, 
+                        p = as.vector(predict(ridge1, xtrain, 
                               s = ridge1$lambda[index.lambda.ridge],
                               type = "response")),
                      type = "Train")
-dte.ridge <- data.frame(Y = factor(ifelse(test.std$smoking == "yes", "1", "0"), 
+dte.ridge <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(predict(ridge1, xtest.std, 
+                        p = as.vector(predict(ridge1, xtest, 
                               s = ridge1$lambda[index.lambda.ridge],
                               type = "response")),
                      type = "Test")
@@ -324,13 +303,13 @@ c(err.ridge[index.lambda.lasso],
 # calcoliamo ROC e AUC per il modello lasso scelto:
 dtr.lasso <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(predict(lasso.cv, newx = xtrain.std, 
+                        p = as.vector(predict(lasso.cv, newx = xtrain, 
                                               s = "lambda.min",
                                               type = "response")),
                         type = "Train")
 dte.lasso <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(predict(lasso.cv, newx = xtest.std, 
+                        p = as.vector(predict(lasso.cv, newx = xtest, 
                                               s = "lambda.min",
                                               type = "response")),
                         type = "Test")
