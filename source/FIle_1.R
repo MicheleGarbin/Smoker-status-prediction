@@ -234,6 +234,7 @@ prev_ridge.1se <- predict(ridge.cv,
                           newx = xvalidation,
                           s = "lambda.1s",
                           type = "response")
+plot(ridge.cv, sign.lambda = 1)
 
 # scegliamo il lambda ottimale per la ridge come quello che minimizza la 
 # neg-entropy sui dati di validation:
@@ -293,6 +294,7 @@ prev_lasso.1se <- predict(lasso.cv,
                           newx = xvalidation,
                           s = "lambda.1s",
                           type = "response")
+plot(lasso.cv, sign.lambda = 1)
 
 # scegliamo il lambda ottimale per la lasso come quello che minimizza la 
 # neg-entropy sui dati di validation:
