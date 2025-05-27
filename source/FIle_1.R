@@ -104,6 +104,12 @@ data %>%
   cor(use = "pairwise.complete.obs") %>%  
   corrplot(method = "ellipse", type = "upper", tl.col = "black", tl.srt = 45)
 
+# eliminazione degli outlier nel dataset di train
+train <- train %>% filter(triglyceride < 500,
+                          LDL < 500,
+                          AST < 500,
+                          ALT < 500)
+
 
 
 # variable selection ------------------------------------------------------
@@ -189,13 +195,11 @@ library(caret)
 pred_class <- factor(ifelse(prob < 0.5, "yes", "no"), levels = c("yes", "no"))
 confusionMatrix(pred_class, test$smoking)
 
-# per un confronto finale tra tutti i modelli mi salvo l'MSE sul test:
-smoking.test.bin <- ifelse(test$smoking == "yes", 1, 0)
-
 
 
 # ridge -------------------------------------------------------------------
 
+smoking.test.bin <- ifelse(test$smoking == "yes", 1, 0)
 smoking.train.bin <- ifelse(train$smoking == "yes", 1, 0)
 xtest <- test %>% select(-smoking) %>% as.matrix()
 
@@ -333,18 +337,6 @@ confusionMatrix(pred_lasso_class, test$smoking)
 predict(lasso1, type = "coefficients", s = "lambda.min") 
 
 
-
-# BSS ---------------------------------------------------------------------
-
-library(leaps)
-bss <- leaps::leaps(y = train %>% pull(smoking),
-                    x = train %>% select(-smoking) %>% as.matrix(),
-                    nbest = 1) # nbest indica quanti modelli migliori per 
-                               # ciascun numero di variabili devono essere 
-                               # restituiti; in questo caso viene restituito 
-                               # solamente il modello migliore per ciascun
-                               # numero di variabili
-image(t(bss$which)) # 
 
 
 
