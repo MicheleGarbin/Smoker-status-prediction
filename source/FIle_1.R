@@ -218,18 +218,21 @@ xvalidation <- validation %>% select(!smoking) %>% as.matrix()
 library(glmnet)
 ridge1 <- glmnet(y = smoking.train1.bin,
                  x = xtrain1,
-                 alpha = 0, lambda.min.ratio = 1e-10, nlambda = 200)
+                 alpha = 0, lambda.min.ratio = 1e-10, nlambda = 200,
+                 family = "binomial")
 # sui dati di validation individuo il lambda che genera il minore MSE
 previsione.ridge <- predict(ridge1, 
                       newx = xvalidation, type = "response")
-err.ridge <- colMeans((smoking.validation.bin - previsione.ridge)^2)
+err.ridge <- apply(previsione.ridge, 2, 
+                   function(x) -sum(smoking.validation.bin * log(x)))
 index.lambda.ridge <- err.ridge %>% which.min()
 
 # ridge con cross-validation
 set.seed(123)
 ridge.cv <- cv.glmnet(y = smoking.train1.bin,
                       x = xtrain1,
-                      alpha = 0, nfolds = 500)
+                      alpha = 0, nfolds = 100,
+                      family = "binomial")
 prev_ridge.min <- predict(ridge.cv, 
                           newx = xvalidation,
                           s = "lambda.min",
@@ -239,15 +242,18 @@ prev_ridge.1se <- predict(ridge.cv,
                           s = "lambda.1s",
                           type = "response")
 
-# scegliamo il lambda ottimale per la ridge come quello che minimizza l'MSE
-# sui dati di test:
+# scegliamo il lambda ottimale per la ridge come quello che minimizza la 
+# neg-entropy sui dati di validation:
 c(err.ridge[index.lambda.ridge],
-  mean((smoking.validation.bin - prev_ridge.min)^2),
-  mean((smoking.validation.bin - prev_ridge.1se)^2)
+  -sum(smoking.validation.bin * log(prev_ridge.min)),
+  -sum(smoking.validation.bin * log(prev_ridge.1se))
   )
 
 # il lambda scelto è quello calcolato senza cross-validation; calcoliamo 
 # ROC e AUC per il modello ridge scelto:
+prob_ridge.test <- predict(ridge1, xtest, 
+                      s = ridge1$lambda[index.lambda.ridge],
+                      type = "response")
 dtr.ridge <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
                         p = as.vector(predict(ridge1, xtrain, 
@@ -256,14 +262,16 @@ dtr.ridge <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"),
                      type = "Train")
 dte.ridge <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(predict(ridge1, xtest, 
-                              s = ridge1$lambda[index.lambda.ridge],
-                              type = "response")),
+                        p = as.vector(prob_ridge.test),
                      type = "Test")
 bind_rows(dtr.ridge, dte.ridge) %>% group_by(type) %>% 
   roc_curve(Y, p, event_level = "first") %>% autoplot()
 bind_rows(dtr.ridge, dte.ridge) %>% group_by(type) %>% roc_auc(Y, p) # leggermente
                         # peggio del risultato ottenuto per procedura stepwise
+
+# matrice di confusione
+pred_ridge_class <- factor(ifelse(prob_ridge.test > 0.5, "yes", "no"), levels = c("yes", "no"))
+confusionMatrix(pred_ridge_class, test$smoking)
 
 
 
@@ -271,18 +279,21 @@ bind_rows(dtr.ridge, dte.ridge) %>% group_by(type) %>% roc_auc(Y, p) # leggermen
 
 lasso1 <- glmnet(y = smoking.train1.bin,
                  x = xtrain1,
-                 alpha = 1, lambda.min.ratio = 1e-10, nlambda = 200)
+                 alpha = 1, lambda.min.ratio = 1e-10, nlambda = 200,
+                 family = "binomial")
 # sul validation set individuo il lambda che genera il minore MSE
 previsione.lasso <- predict(lasso1, 
                             newx = xvalidation, type = "response")
-err.lasso <- colMeans((smoking.validation.bin - previsione.lasso)^2)
+err.lasso <- apply(previsione.lasso, 2, 
+                   function(x) -sum(smoking.validation.bin * log(x)))
 index.lambda.lasso <- err.lasso %>% which.min()
 
 # ridge con cross-validation
 set.seed(123)
 lasso.cv <- cv.glmnet(y = smoking.train1.bin,
                       x = xtrain1,
-                      alpha = 1, nfolds = 500)
+                      alpha = 1, nfolds = 100,
+                      family = "binomial")
 prev_lasso.min <- predict(lasso.cv, 
                           newx = xvalidation,
                           s = "lambda.min",
@@ -292,15 +303,18 @@ prev_lasso.1se <- predict(lasso.cv,
                           s = "lambda.1s",
                           type = "response")
 
-# scegliamo il lambda ottimale per la ridge come quello che minimizza l'MSE
-# sui dati di test:
-c(err.ridge[index.lambda.lasso],
-  mean((smoking.validation.bin - prev_lasso.min)^2),
-  mean((smoking.validation.bin - prev_lasso.1se)^2)
+# scegliamo il lambda ottimale per la ridge come quello che minimizza la 
+# neg-entropy sui dati di validation:
+c(err.lasso[index.lambda.lasso],
+  -sum(smoking.validation.bin * log(prev_lasso.min)),
+  -sum(smoking.validation.bin * log(prev_lasso.1se))
 )
 
 # il lambda scelto è quello calcolato minimo calcolato con cross-validation; 
 # calcoliamo ROC e AUC per il modello lasso scelto:
+prob_lasso.test <- predict(lasso.cv, newx = xtest, 
+                           s = "lambda.min",
+                           type = "response")
 dtr.lasso <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
                         p = as.vector(predict(lasso.cv, newx = xtrain, 
@@ -309,9 +323,7 @@ dtr.lasso <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"),
                         type = "Train")
 dte.lasso <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
                                    levels = c("1", "0")),
-                        p = as.vector(predict(lasso.cv, newx = xtest, 
-                                              s = "lambda.min",
-                                              type = "response")),
+                        p = as.vector(prob_lasso.test),
                         type = "Test")
 bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% 
   roc_curve(Y, p, event_level = "first") %>% autoplot()
@@ -320,7 +332,10 @@ bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% roc_auc(Y, p) # stessi
 
 # per capire quali variabili seleziona il lasso:
 predict(lasso.cv, type = "coefficients", s = "lambda.min") 
-# porta a 0 solamente age
+
+# matrice di confusione
+pred_lasso_class <- factor(ifelse(prob_lasso.test > 0.5, "yes", "no"), levels = c("yes", "no"))
+confusionMatrix(pred_lasso_class, test$smoking)
 
 
 
