@@ -112,7 +112,7 @@ data %>%
 
 # data split --------------------------------------------------------------
 
-library(dplyr)
+library(tidymodels)
 target <- "smoking"
 data[[target]] <- factor(data[[target]], levels = c(1, 0), 
                          labels = c("yes", "no"))
@@ -122,8 +122,8 @@ data <- data %>% mutate(split = ifelse(runif(n()) < 0.7, "train", "test")) # qui
                              # la funzione n() è una funzione scorciatoia della
                              # libreria dplyr, nel senso che tiene conto del 
                              # numero di righe del dataframe che viene passato
-train <- data %>% filter(split == "train") %>% select(-split)
-test <- data %>% filter(split == "test") %>% select(-split)
+train <- data %>% filter(split == "train") %>% dplyr::select(-split)
+test <- data %>% filter(split == "test") %>% dplyr::select(-split)
 
 n <- nrow(train)
 
@@ -204,14 +204,16 @@ confusionMatrix(pred_class, test$smoking)
 
 smoking.test.bin <- ifelse(test$smoking == "yes", 1, 0)
 smoking.train.bin <- ifelse(train$smoking == "yes", 1, 0)
-xtest <- test %>% select(-smoking) %>% as.matrix()
-xtrain <- train %>% select(-smoking, -split) %>% as.matrix()
+xtest <- test %>% dplyr::select(-smoking) %>% as.matrix()
+xtrain <- train %>% dplyr::select(-smoking) %>% as.matrix()
 
 # ridge con cross-validation sul train set:
+library(glmnet)
+set.seed(123)
 ridge1 <- cv.glmnet(y = smoking.train.bin,
-                       x = xtrain,
-                       alpha = 0, nfolds = 100,
-                       family = "binomial")
+                    x = xtrain,
+                    alpha = 0, nfolds = 100,
+                    family = "binomial")
 prob_train.ridge1 <- predict(ridge1, 
                             newx = xtrain, 
                             s = "lambda.min",
@@ -242,11 +244,15 @@ pred_ridge_class <- factor(ifelse(prob_ridge1.test > 0.5, "yes", "no"),
                            levels = c("yes", "no"))
 confusionMatrix(pred_ridge_class, test$smoking)
 
+# valori dei coefficienti
+predict(ridge1, type = "coefficients", s = "lambda.1se")
+
 
 
 # lasso -------------------------------------------------------------------
 
 # lasso con cross-validation sul train set
+set.seed(456)
 lasso1 <- cv.glmnet(y = smoking.train.bin,
                     x = xtrain,
                     alpha = 1, nfolds = 100,
@@ -263,15 +269,14 @@ plot(lasso1, sign.lambda = 1)
 prob_lasso1.test <- predict(lasso1, xtest, 
                             s = "lambda.1se",
                             type = "response")
-dtr.lasso <- data.frame(Y = factor(ifelse(train$smoking == "yes", "1", "0"), 
-                                   levels = c("1", "0")),
-                        p = as.vector(prob_train.lasso1),
+dtr.lasso <- data.frame(Y = train$smoking,
+                        p = c(prob_train.lasso1),
                         type = "Train")
-dte.lasso <- data.frame(Y = factor(ifelse(test$smoking == "yes", "1", "0"), 
-                                   levels = c("1", "0")),
-                        p = as.vector(prob_lasso1.test),
+dte.lasso <- data.frame(Y = test$smoking,
+                        p = c(prob_lasso1.test),
                         type = "Test")
 bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% 
+  mutate(Y = factor(Y)) %>% 
   roc_curve(Y, p, event_level = "first") %>% autoplot()
 bind_rows(dtr.lasso, dte.lasso) %>% group_by(type) %>% roc_auc(Y, p) 
 
@@ -290,37 +295,64 @@ predict(lasso1, type = "coefficients", s = "lambda.1se")
 # glmnet ------------------------------------------------------------------
 
 # per diversi valori di alpha, provo a calcolarmi le metriche
-# accuracy, sensitivity e specificity sul test set ponendo nfolds = 50 per 
+# accuracy, sensitivity, specificity e AUC sul test set ponendo nfolds = 50 per 
 # quanto riguarda la cross-validation sul train set
 
-# mi salvo i risultati in una matrice di tre colonne (una per ogni metrica)
-# e nelle righe ho i vari alpha
-res_glmnet <- matrix(NA, 20, 3)
-colnames(res_glmnet) <- c("Accuracy", "Sensitivity", "Specificity")
+# mi salvo i risultati in una matrice di quattro colonne (una per ogni metrica)
+# e nelle righe ho i vari alpha:
+res_glmnet <- matrix(NA, 20, 4)
+colnames(res_glmnet) <- c("Accuracy", "Sensitivity", "Specificity", "AUC")
 alpha_val <- seq(0, 1, length = 20)
+set.seed(123456)
 for(i in 1:20){
   glmnet_cv <- cv.glmnet(x = xtrain,
                          y = smoking.train.bin,
                          alpha = alpha_val[i],
                          nfolds = 50)
+  
   pred_glmnet <- predict(glmnet_cv, xtest, 
                          s = "lambda.1se", type = "response")
   pred_lasso_class <- factor(ifelse(pred_glmnet > 0.5, "yes", "no"), 
                              levels = c("yes", "no"))
   cm <- confusionMatrix(pred_lasso_class, test$smoking)
+  dte.elastic_net <- data.frame(Y = test$smoking,
+                                p = c(pred_glmnet))
+  auc_val <- dte.elastic_net %>% roc_auc(Y, p)
+  
   res_glmnet[i, ] <- c(
     cm$overall["Accuracy"],
     cm$byClass["Sensitivity"],
-    cm$byClass["Specificity"]
+    cm$byClass["Specificity"],
+    auc_val %>% dplyr::pull(.estimate)
   )
 }
 res_glmnet <- cbind(alpha_val, res_glmnet)
-# risultati in ordine di accuracy:
-res_glmnet[order(res_glmnet[, 2]), ]
-# risultati in ordine di sensitivity:
-res_glmnet[order(res_glmnet[, 3]), ]
-# risultati in ordine di specificity:
-res_glmnet[order(res_glmnet[, 4]), ]
+# risultati in ordine di accuracy (top 6):
+res_glmnet[order(res_glmnet[, 2])[20:15], c(1, 2)]
+# risultati in ordine di sensitivity (top 6):
+res_glmnet[order(res_glmnet[, 3])[20:15], c(1, 3)]
+# risultati in ordine di specificity (top 6):
+res_glmnet[order(res_glmnet[, 4])[20:15], c(1, 4)]
+# risultati in ordine di AUC (top 6):
+res_glmnet[order(res_glmnet[, 5])[20:15], c(1, 5)]
+
+# alpha = 0.84210526 fornisce i migliori risultati nel complesso. Proviamo
+# dunque ad utilizzare la cross_validation a 10 fold come avevamo fatto 
+# nella ridge e lasso:
+glmnet_cv <- cv.glmnet(x = xtrain,
+                       y = smoking.train.bin,
+                       alpha = alpha_val[17],
+                       nfolds = 100)
+
+pred_glmnet <- predict(glmnet_cv, xtest, 
+                       s = "lambda.1se", type = "response")
+pred_lasso_class <- factor(ifelse(pred_glmnet > 0.5, "yes", "no"), 
+                           levels = c("yes", "no"))
+confusionMatrix(pred_lasso_class, test$smoking)
+dte.elastic_net <- data.frame(Y = test$smoking,
+                              p = c(pred_glmnet))
+dte.elastic_net %>% roc_auc(Y, p)
+
 
 
 
