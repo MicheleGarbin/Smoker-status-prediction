@@ -337,7 +337,7 @@ res_glmnet[order(res_glmnet[, 4])[20:15], c(1, 4)]
 res_glmnet[order(res_glmnet[, 5])[20:15], c(1, 5)]
 
 # alpha = 0.84210526 fornisce i migliori risultati nel complesso. Proviamo
-# dunque ad utilizzare la cross_validation a 10 fold come avevamo fatto 
+# dunque ad utilizzare la cross_validation a 100 fold come avevamo fatto 
 # nella ridge e lasso:
 glmnet_cv <- cv.glmnet(x = xtrain,
                        y = smoking.train.bin,
