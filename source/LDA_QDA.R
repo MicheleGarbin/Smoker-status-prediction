@@ -15,7 +15,7 @@ library(tidymodels)
 #----------------------------------------------------------
 # selection of predictors
 #----------------------------------------------------------
-data <- read.csv("train_dataset.csv")
+data <- read.csv("data/train_dataset.csv")
 #eliminating variables that inherently violate normality
 data<- data %>% dplyr::select(-c(hearing.left., hearing.right., 
                                dental.caries, Urine.protein, eyesight.left., 

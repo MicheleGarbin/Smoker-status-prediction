@@ -1,6 +1,6 @@
 rm(list = ls())
 
-data <- read.csv('train_dataset.csv')
+data <- read.csv('data/train_dataset.csv')
 library(tidyverse)
 library(dplyr)
 data <- as.tibble(data)

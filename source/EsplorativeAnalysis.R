@@ -17,7 +17,7 @@ library(scales)
 # Abuso di alcol Steatosi epatica (fegato grasso) Ostruzione biliare
 # -------------------------------------------------------------------------
 
-data <- read.csv("train_dataset.csv")
+data <- read.csv("data/train_dataset.csv")
 target = "smoking"
 #factorizing categorial variables 
 data <- data %>% mutate(hearing.left. = as.factor(hearing.left.),
