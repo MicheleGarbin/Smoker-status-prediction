@@ -4,9 +4,17 @@ This project was carried out in collaboration with my colleagues [@Delì Lin](ht
 
 The goal of the project was to solve a classification problem: predicting smoker status based on biological variables.
 
+The statistical methods and models used to address this problem are:
+- logistic regression with stepwise variable selection
+- logistic regression with ridge and lasso penalization
+- linear discriminant analysis
+- quadratic discriminant analysis
+- classification tree
+- random forest
+
 ## File structure
 
 - The R scripts and code are located in the `source` folder.
-- The `report` folder contains the LaTeX source files compressed in a `.zip` archive, as well as the compiled PDF report, which you can download directly.
+- The `report` folder contains the LaTeX source files compressed in a `.zip` archive, as well as the compiled PDF report, which you can download by clicking [here](https://raw.githubusercontent.com/MicheleGarbin/Smoker-status-prediction/main/report/Smoker_status_prediction.pdf).
 
 Feel free to explore the code and the report for more details!
