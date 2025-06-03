@@ -1,6 +1,6 @@
 # Project Overview
 
-This project was carried out in collaboration with my colleagues [@colleague1](https://github.com/colleague1) and [@colleague2](https://github.com/colleague2).
+This project was carried out in collaboration with my colleagues [@Delì Lin](https://github.com/lindeli31) and [@colleague2](https://github.com/colleague2).
 
 The goal of the project was to solve a classification problem: predicting smoker status based on biological variables.
 
