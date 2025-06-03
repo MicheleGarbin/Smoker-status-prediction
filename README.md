@@ -16,5 +16,6 @@ The statistical methods and models used to address this problem are:
 
 - The R scripts and code are located in the `source` folder.
 - The `report` folder contains the LaTeX source files compressed in a `.zip` archive, as well as the compiled PDF report, which you can download by clicking [here](https://raw.githubusercontent.com/MicheleGarbin/Smoker-status-prediction/main/report/Smoker_status_prediction.pdf).
+- The `data` folder contains the dataset we worked on during this project. The data is publicly available at the following [link](https://www.kaggle.com/datasets/gauravduttakiit/smoker-status-prediction-using-biosignals?select=train_dataset.csv)
 
 Feel free to explore the code and the report for more details!
