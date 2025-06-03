@@ -20,3 +20,4 @@ The statistical methods and models used to address this problem are:
 - The `data` folder contains the dataset we worked on during this project. The data is publicly available at the following [link](https://www.kaggle.com/datasets/gauravduttakiit/smoker-status-prediction-using-biosignals?select=train_dataset.csv).
 
 Feel free to explore the code and the report for more details!
+
